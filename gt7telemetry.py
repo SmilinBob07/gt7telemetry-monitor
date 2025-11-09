@@ -4,6 +4,7 @@ from datetime import timedelta as td
 import socket
 import sys
 import struct
+import time  # put this at the top with imports
 # pip3 install salsa20
 from salsa20 import Salsa20_xor
 
@@ -172,202 +173,267 @@ prevlap = -1
 pktid = 0
 pknt = 0
 while True:
-	try:
-		data, address = s.recvfrom(4096)
-		pknt = pknt + 1
-		ddata = salsa20_dec(data)
-		if len(ddata) > 0 and struct.unpack('i', ddata[0x70:0x70+4])[0] > pktid:
-			pktid = struct.unpack('i', ddata[0x70:0x70+4])[0]
+	data, _ = s.recvfrom(2048)
+	pknt = pknt + 1
+	ddata = salsa20_dec(data)
+	if len(ddata) > 0 and struct.unpack('i', ddata[0x70:0x70+4])[0] > pktid:
+		pktid = struct.unpack('i', ddata[0x70:0x70+4])[00]
 
-			bstlap = struct.unpack('i', ddata[0x78:0x78+4])[0]
-			lstlap = struct.unpack('i', ddata[0x7C:0x7C+4])[0]
-			curlap = struct.unpack('h', ddata[0x74:0x74+2])[0]
-			if curlap > 0:
-				dt_now = dt.now()
-				if curlap != prevlap:
-					prevlap = curlap
-					dt_start = dt_now
-				curLapTime = dt_now - dt_start
-				printAt('{:>9}'.format(secondsToLaptime(curLapTime.total_seconds())), 7, 49)
-			else:
-				curLapTime = 0
-				printAt('{:>9}'.format(''), 7, 49)
+		bstlap = struct.unpack('i', ddata[0x78:0x78+4])[0]
+		lstlap = struct.unpack('i', ddata[0x7C:0x7C+4])[0]
+		curlap = struct.unpack('h', ddata[0x74:0x74+2])[0]
+		if curlap > 0:
+			dt_now = dt.now()
+			if curlap != prevlap:
+				prevlap = curlap
+				dt_start = dt_now
+			curLapTime = dt_now - dt_start
+			printAt('{:>9}'.format(secondsToLaptime(curLapTime.total_seconds())), 7, 49)
+		else:
+			curLapTime = 0
+			printAt('{:>9}'.format(''), 7, 49)
 					
-			cgear = struct.unpack('B', ddata[0x90:0x90+1])[0] & 0b00001111
-			sgear = struct.unpack('B', ddata[0x90:0x90+1])[0] >> 4
-			if cgear < 1:
-				cgear = 'R'
-			if sgear > 14:
-				sgear = '–'
+		cgear = struct.unpack('B', ddata[0x90:0x90+1])[0] & 0b00001111
+		sgear = struct.unpack('B', ddata[0x90:0x90+1])[0] >> 4
+		if cgear < 1:
+			cgear = 'R'
+		if sgear > 14:
+			sgear = '–'
 
-			fuelCapacity = struct.unpack('f', ddata[0x48:0x48+4])[0]
-			isEV = False if fuelCapacity > 0 else True
-			if isEV:
-				printAt('Charge:', 14, 1)
-				printAt('{:3.0f} kWh'.format(struct.unpack('f', ddata[0x44:0x44+4])[0]), 14, 11)		# charge remaining
-				printAt('??? kWh'.format(struct.unpack('f', ddata[0x48:0x48+4])[0]), 14, 29)			# max battery capacity
-			else:
-				printAt('Fuel:  ', 14, 1)
-				printAt('{:3.0f} lit'.format(struct.unpack('f', ddata[0x44:0x44+4])[0]), 14, 11)		# fuel
-				printAt('{:3.0f} lit'.format(struct.unpack('f', ddata[0x48:0x48+4])[0]), 14, 29)		# max fuel
+		fuelCapacity = struct.unpack('f', ddata[0x48:0x48+4])[0]
+		isEV = False if fuelCapacity > 0 else True
+		if isEV:
+			printAt('Charge:', 14, 1)
+			printAt('{:3.0f} kWh'.format(struct.unpack('f', ddata[0x44:0x44+4])[0]), 14, 11)		# charge remaining
+			printAt('??? kWh'.format(struct.unpack('f', ddata[0x48:0x48+4])[0]), 14, 29)			# max battery capacity
+		else:
+			printAt('Fuel:  ', 14, 1)
+			printAt('{:3.0f} lit'.format(struct.unpack('f', ddata[0x44:0x44+4])[0]), 14, 11)		# fuel
+			printAt('{:3.0f} lit'.format(struct.unpack('f', ddata[0x48:0x48+4])[0]), 14, 29)		# max fuel
 
-			boost = struct.unpack('f', ddata[0x50:0x50+4])[0] - 1
-			hasTurbo = True if boost > -1 else False
+		boost = struct.unpack('f', ddata[0x50:0x50+4])[0] - 1
+		hasTurbo = True if boost > -1 else False
 
 
-			tyreDiamFL = struct.unpack('f', ddata[0xB4:0xB4+4])[0]
-			tyreDiamFR = struct.unpack('f', ddata[0xB8:0xB8+4])[0]
-			tyreDiamRL = struct.unpack('f', ddata[0xBC:0xBC+4])[0]
-			tyreDiamRR = struct.unpack('f', ddata[0xC0:0xC0+4])[0]
+		tyreDiamFL = struct.unpack('f', ddata[0xB4:0xB4+4])[0]
+		tyreDiamFR = struct.unpack('f', ddata[0xB8:0xB8+4])[0]
+		tyreDiamRL = struct.unpack('f', ddata[0xBC:0xBC+4])[0]
+		tyreDiamRR = struct.unpack('f', ddata[0xC0:0xC0+4])[0]
 
-			tyreSpeedFL = abs(3.6 * tyreDiamFL * struct.unpack('f', ddata[0xA4:0xA4+4])[0])
-			tyreSpeedFR = abs(3.6 * tyreDiamFR * struct.unpack('f', ddata[0xA8:0xA8+4])[0])
-			tyreSpeedRL = abs(3.6 * tyreDiamRL * struct.unpack('f', ddata[0xAC:0xAC+4])[0])
-			tyreSpeedRR = abs(3.6 * tyreDiamRR * struct.unpack('f', ddata[0xB0:0xB0+4])[0])
+		tyreSpeedFL = abs(3.6 * tyreDiamFL * struct.unpack('f', ddata[0xA4:0xA4+4])[0])
+		tyreSpeedFR = abs(3.6 * tyreDiamFR * struct.unpack('f', ddata[0xA8:0xA8+4])[0])
+		tyreSpeedRL = abs(3.6 * tyreDiamRL * struct.unpack('f', ddata[0xAC:0xAC+4])[0])
+		tyreSpeedRR = abs(3.6 * tyreDiamRR * struct.unpack('f', ddata[0xB0:0xB0+4])[0])
 
-			carSpeed = 3.6 * struct.unpack('f', ddata[0x4C:0x4C+4])[0]
+		carSpeed = 3.6 * struct.unpack('f', ddata[0x4C:0x4C+4])[0]
 
-			if carSpeed > 0:
-				tyreSlipRatioFL = '{:6.2f}'.format(tyreSpeedFL / carSpeed)
-				tyreSlipRatioFR = '{:6.2f}'.format(tyreSpeedFR / carSpeed)
-				tyreSlipRatioRL = '{:6.2f}'.format(tyreSpeedRL / carSpeed)
-				tyreSlipRatioRR = '{:6.2f}'.format(tyreSpeedRR / carSpeed)
-			else:
-				tyreSlipRatioFL = '  –  '
-				tyreSlipRatioFR = '  –  '
-				tyreSlipRatioRL = '  -  '
-				tyreSlipRatioRR = '  –  '
+# === Custom ABS / Slip Detection ===
+try:
+	brake = struct.unpack('B', ddata[0x92:0x92+1])[0] / 2.55
+	abs_active = 0
+	wheel_lock_FL = 0
+	wheel_slip_RR = 0
 
-			printAt('{:>8}'.format(str(td(seconds=round(struct.unpack('i', ddata[0x80:0x80+4])[0] / 1000)))), 3, 56, reverse=1)	# time of day on track
+	# Calculate slip ratios safely
+	if carSpeed > 1:  # avoid divide-by-zero
+		slip_FL = abs((tyreSpeedFL - carSpeed) / carSpeed)
+		slip_FR = abs((tyreSpeedFR - carSpeed) / carSpeed)
+		slip_RL = abs((tyreSpeedRL - carSpeed) / carSpeed)
+		slip_RR = abs((tyreSpeedRR - carSpeed) / carSpeed)
+	else:
+		slip_FL = slip_FR = slip_RL = slip_RR = 0
 
-			printAt('{:3.0f}'.format(curlap), 5, 7)															# current lap
-			printAt('{:3.0f}'.format(struct.unpack('h', ddata[0x76:0x76+2])[0]), 5, 11)						# total laps
+	# Simple ABS logic: if brake is heavy and slip spikes → ABS active
+	if brake > 30 and (slip_FL > 0.15 or slip_FR > 0.15 or slip_RL > 0.15 or slip_RR > 0.15):
+		abs_active = 1
 
-			printAt('{:2.0f}'.format(struct.unpack('h', ddata[0x84:0x84+2])[0]), 5, 31)						# current position
-			printAt('{:2.0f}'.format(struct.unpack('h', ddata[0x86:0x86+2])[0]), 5, 34)						# total positions
+	# Example output values you can export later to SimHub or CSV
+	telemetry_extra = {
+		"ABS_Active": abs_active,
+		"WheelLock_FL": slip_FL,
+		"WheelSlip_RR": slip_RR
+	}
+	# === Display custom telemetry values ===
+	abs_text = f"ABS:{abs_active} | FL Lock:{slip_FL:5.2f} | RR Slip:{slip_RR:5.2f}"
+	printAt(abs_text, 41, 1, bold=1)
 
-			if bstlap != -1:
-				printAt('{:>9}'.format(secondsToLaptime(bstlap / 1000)), 7, 16)		# best lap time
-			else:
-				printAt('{:>9}'.format(''), 7, 16)
-			if lstlap != -1:
-				printAt('{:>9}'.format(secondsToLaptime(lstlap / 1000)), 8, 16)		# last lap time
-			else:
-				printAt('{:>9}'.format(''), 8, 16)
+except Exception as e:
+	telemetry_extra = {"ABS_Active": 0, "WheelLock_FL": 0, "WheelSlip_RR": 0}
 
-			printAt('{:5.0f}'.format(struct.unpack('i', ddata[0x124:0x124+4])[0]), 10, 48, reverse=1)		# car id
+# --- Derived data for ABS / wheel slip telemetry ---
+brake = struct.unpack('B', ddata[0x92:0x92+1])[0] / 2.55  # Brake % (0-100)
 
-			printAt('{:3.0f}'.format(struct.unpack('B', ddata[0x91:0x91+1])[0] / 2.55), 12, 11)				# throttle
-			printAt('{:7.0f}'.format(struct.unpack('f', ddata[0x3C:0x3C+4])[0]), 12, 25)					# rpm
-			printAt('{:7.1f}'.format(carSpeed), 12, 47)														# speed kph
-			printAt('{:5.0f}'.format(struct.unpack('H', ddata[0x88:0x88+2])[0]), 12, 83)					# rpm rev warning
+# Calculate slip ratios for realism
+def calc_slip(wheel_speed, veh_speed):
+    if veh_speed < 5:  # ignore when nearly stopped
+        return 0.0
+    slip = max(0.0, 1.0 - (wheel_speed / veh_speed))
+    return slip
 
-			printAt('{:3.0f}'.format(struct.unpack('B', ddata[0x92:0x92+1])[0] / 2.55), 13, 11)				# brake
-			printAt('{}'.format(cgear), 13, 27)																# actual gear
-			printAt('{}'.format(sgear), 13, 30)																# suggested gear
+slip_FL = calc_slip(tyreSpeedFL, carSpeed)
+slip_FR = calc_slip(tyreSpeedFR, carSpeed)
+slip_RL = calc_slip(tyreSpeedRL, carSpeed)
+slip_RR = calc_slip(tyreSpeedRR, carSpeed)
+slip_avg = (slip_FL + slip_FR + slip_RL + slip_RR) / 4.0
 
-			if hasTurbo:
-				printAt('{:7.2f}'.format(struct.unpack('f', ddata[0x50:0x50+4])[0] - 1), 13, 47)			# boost
-			else:
-				printAt('{:>7}'.format('–'), 13, 47)														# no turbo
+# Simple ABS detection heuristic
+ABS_active = 0
+if brake > 60 and carSpeed > 30:
+    if slip_avg > 0.12:
+        ABS_active = 1
 
-			printAt('{:5.0f}'.format(struct.unpack('H', ddata[0x8A:0x8A+2])[0]), 13, 83)					# rpm rev limiter
+# Wheel lock intensity (0–1)
+wheel_lock_intensity = min(max(slip_avg * 5, 0.0), 1.0)
 
-			printAt('{:5.0f}'.format(struct.unpack('h', ddata[0x8C:0x8C+2])[0]), 14, 83)					# estimated top speed
+# --- Send to SimHub over UDP JSON ---
+import json
+udp_target = ('127.0.0.1', 5056)
+udp_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
-			printAt('{:5.3f}'.format(struct.unpack('f', ddata[0xF4:0xF4+4])[0]), 15, 9)						# clutch
-			printAt('{:5.3f}'.format(struct.unpack('f', ddata[0xF8:0xF8+4])[0]), 15, 17)					# clutch engaged
-			printAt('{:7.0f}'.format(struct.unpack('f', ddata[0xFC:0xFC+4])[0]), 15, 48)					# rpm after clutch
+json_packet = json.dumps({
+    "ABS_Active": ABS_active,
+    "WheelLock": wheel_lock_intensity,
+    "WheelSlip_Avg": slip_avg
+}).encode('utf-8')
 
-			printAt('{:6.1f}'.format(struct.unpack('f', ddata[0x5C:0x5C+4])[0]), 17, 17)					# oil temp
-			printAt('{:6.1f}'.format(struct.unpack('f', ddata[0x58:0x58+4])[0]), 17, 49)					# water temp
+udp_sock.sendto(json_packet, udp_target)
+# --- End derived telemetry section ---
+if carSpeed > 0:
+			tyreSlipRatioFL = '{:6.2f}'.format(tyreSpeedFL / carSpeed)
+			tyreSlipRatioFR = '{:6.2f}'.format(tyreSpeedFR / carSpeed)
+			tyreSlipRatioRL = '{:6.2f}'.format(tyreSpeedRL / carSpeed)
+			tyreSlipRatioRR = '{:6.2f}'.format(tyreSpeedRR / carSpeed)
+else:
+			tyreSlipRatioFL = '  –  '
+			tyreSlipRatioFR = '  –  '
+			tyreSlipRatioRL = '  -  '
+			tyreSlipRatioRR = '  –  '
 
-			printAt('{:6.2f}'.format(struct.unpack('f', ddata[0x54:0x54+4])[0]), 18, 17)					# oil pressure
-			printAt('{:6.0f}'.format(1000 * struct.unpack('f', ddata[0x38:0x38+4])[0]), 18, 49)				# ride height
+printAt('{:>8}'.format(str(td(seconds=round(struct.unpack('i', ddata[0x80:0x80+4])[0] / 1000)))), 3, 56, reverse=1)	# time of day on track
 
-			printAt('{:6.1f}'.format(struct.unpack('f', ddata[0x60:0x60+4])[0]), 21, 5)						# tyre temp FL
-			printAt('{:6.1f}'.format(struct.unpack('f', ddata[0x64:0x64+4])[0]), 21, 25)					# tyre temp FR
-			printAt('{:6.1f}'.format(200 * tyreDiamFL), 21, 43)												# tyre diameter FL
-			printAt('{:6.1f}'.format(200 * tyreDiamFR), 21, 50)												# tyre diameter FR
+printAt('{:3.0f}'.format(curlap), 5, 7)															# current lap
+printAt('{:3.0f}'.format(struct.unpack('h', ddata[0x76:0x76+2])[0]), 5, 11)						# total laps
 
-			printAt('{:6.1f}'.format(tyreSpeedFL), 22, 5)													# tyre speed FL
-			printAt('{:6.1f}'.format(tyreSpeedFR), 22, 25)													# tyre speed FR
-			printAt(tyreSlipRatioFL, 22, 43)																# tyre slip ratio FL
-			printAt(tyreSlipRatioFR, 22, 50)																# tyre slip ratio FR
+printAt('{:2.0f}'.format(struct.unpack('h', ddata[0x84:0x84+2])[0]), 5, 31)						# current position
+printAt('{:2.0f}'.format(struct.unpack('h', ddata[0x86:0x86+2])[0]), 5, 34)						# total positions
 
-			printAt('{:6.3f}'.format(struct.unpack('f', ddata[0xC4:0xC4+4])[0]), 23, 5)						# suspension FL
-			printAt('{:6.3f}'.format(struct.unpack('f', ddata[0xC8:0xC8+4])[0]), 23, 25)					# suspension FR
+if bstlap != -1:
+	printAt('{:>9}'.format(secondsToLaptime(bstlap / 1000)), 7, 16)		# best lap time
+else:
+	printAt('{:>9}'.format(''), 7, 16)
+if lstlap != -1:
+	printAt('{:>9}'.format(secondsToLaptime(lstlap / 1000)), 8, 16)		# last lap time
+else:
+	printAt('{:>9}'.format(''), 8, 16)
 
-			printAt('{:6.1f}'.format(struct.unpack('f', ddata[0x68:0x68+4])[0]), 25, 5)						# tyre temp RL
-			printAt('{:6.1f}'.format(struct.unpack('f', ddata[0x6C:0x6C+4])[0]), 25, 25)					# tyre temp RR
-			printAt('{:6.1f}'.format(200 * tyreDiamRL), 25, 43)												# tyre diameter RL
-			printAt('{:6.1f}'.format(200 * tyreDiamRR), 25, 50)												# tyre diameter RR
+printAt('{:5.0f}'.format(struct.unpack('i', ddata[0x124:0x124+4])[0]), 10, 48, reverse=1)		# car id
+		
+printAt('{:3.0f}'.format(struct.unpack('B', ddata[0x91:0x91+1])[0] / 2.55), 12, 11)				# throttle
+printAt('{:7.0f}'.format(struct.unpack('f', ddata[0x3C:0x3C+4])[0]), 12, 25)					# rpm
+printAt('{:7.1f}'.format(carSpeed), 12, 47)														# speed kph
+printAt('{:5.0f}'.format(struct.unpack('H', ddata[0x88:0x88+2])[0]), 12, 83)					# rpm rev warning
 
-			printAt('{:6.1f}'.format(tyreSpeedRL), 26, 5)													# tyre speed RL
-			printAt('{:6.1f}'.format(tyreSpeedRR), 26, 25)													# tyre speed RR
-			printAt(tyreSlipRatioRL, 26, 43)																# tyre slip ratio RL
-			printAt(tyreSlipRatioRR, 26, 50)																# tyre slip ratio RR
+printAt('{:3.0f}'.format(struct.unpack('B', ddata[0x92:0x92+1])[0] / 2.55), 13, 11)				# brake
+printAt('{}'.format(cgear), 13, 27)																# actual gear
+printAt('{}'.format(sgear), 13, 30)																# suggested gear
 
-			printAt('{:6.3f}'.format(struct.unpack('f', ddata[0xCC:0xCC+4])[0]), 27, 5)						# suspension RL
-			printAt('{:6.3f}'.format(struct.unpack('f', ddata[0xD0:0xD0+4])[0]), 27, 25)					# suspension RR
+if hasTurbo:
+	printAt('{:7.2f}'.format(struct.unpack('f', ddata[0x50:0x50+4])[0] - 1), 13, 47)			# boost
+else:
+	printAt('{:>7}'.format('–'), 13, 47)														# no turbo
 
-			printAt('{:7.3f}'.format(struct.unpack('f', ddata[0x104:0x104+4])[0]), 30, 5)					# 1st gear
-			printAt('{:7.3f}'.format(struct.unpack('f', ddata[0x108:0x108+4])[0]), 31, 5)					# 2nd gear
-			printAt('{:7.3f}'.format(struct.unpack('f', ddata[0x10C:0x10C+4])[0]), 32, 5)					# 3rd gear
-			printAt('{:7.3f}'.format(struct.unpack('f', ddata[0x110:0x110+4])[0]), 33, 5)					# 4th gear
-			printAt('{:7.3f}'.format(struct.unpack('f', ddata[0x114:0x114+4])[0]), 34, 5)					# 5th gear
-			printAt('{:7.3f}'.format(struct.unpack('f', ddata[0x118:0x118+4])[0]), 35, 5)					# 6th gear
-			printAt('{:7.3f}'.format(struct.unpack('f', ddata[0x11C:0x11C+4])[0]), 36, 5)					# 7th gear
-			printAt('{:7.3f}'.format(struct.unpack('f', ddata[0x120:0x120+4])[0]), 37, 5)					# 8th gear
+printAt('{:5.0f}'.format(struct.unpack('H', ddata[0x8A:0x8A+2])[0]), 13, 83)					# rpm rev limiter
 
-			printAt('{:7.3f}'.format(struct.unpack('f', ddata[0x100:0x100+4])[0]), 39, 5)					# ??? gear
+printAt('{:5.0f}'.format(struct.unpack('h', ddata[0x8C:0x8C+2])[0]), 14, 83)					# estimated top speed
 
-			printAt('{:11.4f}'.format(struct.unpack('f', ddata[0x04:0x04+4])[0]), 30, 23)					# pos X
-			printAt('{:11.4f}'.format(struct.unpack('f', ddata[0x08:0x08+4])[0]), 31, 23)					# pos Y
-			printAt('{:11.4f}'.format(struct.unpack('f', ddata[0x0C:0x0C+4])[0]), 32, 23)					# pos Z
+printAt('{:5.3f}'.format(struct.unpack('f', ddata[0xF4:0xF4+4])[0]), 15, 9)						# clutch
+printAt('{:5.3f}'.format(struct.unpack('f', ddata[0xF8:0xF8+4])[0]), 15, 17)					# clutch engaged
+printAt('{:7.0f}'.format(struct.unpack('f', ddata[0xFC:0xFC+4])[0]), 15, 48)					# rpm after clutch
 
-			printAt('{:11.4f}'.format(struct.unpack('f', ddata[0x10:0x10+4])[0]), 30, 43)					# velocity X
-			printAt('{:11.4f}'.format(struct.unpack('f', ddata[0x14:0x14+4])[0]), 31, 43)					# velocity Y
-			printAt('{:11.4f}'.format(struct.unpack('f', ddata[0x18:0x18+4])[0]), 32, 43)					# velocity Z
+printAt('{:6.1f}'.format(struct.unpack('f', ddata[0x5C:0x5C+4])[0]), 17, 17)					# oil temp
+printAt('{:6.1f}'.format(struct.unpack('f', ddata[0x58:0x58+4])[0]), 17, 49)					# water temp
 
-			printAt('{:9.4f}'.format(struct.unpack('f', ddata[0x1C:0x1C+4])[0]), 35, 23)					# rot Pitch
-			printAt('{:9.4f}'.format(struct.unpack('f', ddata[0x20:0x20+4])[0]), 36, 23)					# rot Yaw
-			printAt('{:9.4f}'.format(struct.unpack('f', ddata[0x24:0x24+4])[0]), 37, 23)					# rot Roll
+printAt('{:6.2f}'.format(struct.unpack('f', ddata[0x54:0x54+4])[0]), 18, 17)					# oil pressure
+printAt('{:6.0f}'.format(1000 * struct.unpack('f', ddata[0x38:0x38+4])[0]), 18, 49)				# ride height
 
-			printAt('{:9.4f}'.format(struct.unpack('f', ddata[0x2C:0x2C+4])[0]), 35, 43)					# angular velocity X
-			printAt('{:9.4f}'.format(struct.unpack('f', ddata[0x30:0x30+4])[0]), 36, 43)					# angular velocity Y
-			printAt('{:9.4f}'.format(struct.unpack('f', ddata[0x34:0x34+4])[0]), 37, 43)					# angular velocity Z
+printAt('{:6.1f}'.format(struct.unpack('f', ddata[0x60:0x60+4])[0]), 21, 5)						# tyre temp FL
+printAt('{:6.1f}'.format(struct.unpack('f', ddata[0x64:0x64+4])[0]), 21, 25)					# tyre temp FR
+printAt('{:6.1f}'.format(200 * tyreDiamFL), 21, 43)												# tyre diameter FL
+printAt('{:6.1f}'.format(200 * tyreDiamFR), 21, 50)												# tyre diameter FR
 
-			printAt('{:7.4f}'.format(struct.unpack('f', ddata[0x28:0x28+4])[0]), 39, 25)					# rot ???
+printAt('{:6.1f}'.format(tyreSpeedFL), 22, 5)													# tyre speed FL
+printAt('{:6.1f}'.format(tyreSpeedFR), 22, 25)													# tyre speed FR
+printAt(tyreSlipRatioFL, 22, 43)																# tyre slip ratio FL
+printAt(tyreSlipRatioFR, 22, 50)																# tyre slip ratio FR
 
-			printAt('0x8E BITS  =  {:0>8}'.format(bin(struct.unpack('B', ddata[0x8E:0x8E+1])[0])[2:]), 23, 71)	# various flags (see https://github.com/Nenkai/PDTools/blob/master/PDTools.SimulatorInterface/SimulatorPacketG7S0.cs)
-			printAt('0x8F BITS  =  {:0>8}'.format(bin(struct.unpack('B', ddata[0x8F:0x8F+1])[0])[2:]), 24, 71)	# various flags (see https://github.com/Nenkai/PDTools/blob/master/PDTools.SimulatorInterface/SimulatorPacketG7S0.cs)
-			printAt('0x93 BITS  =  {:0>8}'.format(bin(struct.unpack('B', ddata[0x93:0x93+1])[0])[2:]), 25, 71)	# 0x93 = ???
+printAt('{:6.3f}'.format(struct.unpack('f', ddata[0xC4:0xC4+4])[0]), 23, 5)						# suspension FL
+printAt('{:6.3f}'.format(struct.unpack('f', ddata[0xC8:0xC8+4])[0]), 23, 25)					# suspension FR
 
-			printAt('0x94 FLOAT {:11.5f}'.format(struct.unpack('f', ddata[0x94:0x94+4])[0]), 27, 71)			# 0x94 = ???
-			printAt('0x98 FLOAT {:11.5f}'.format(struct.unpack('f', ddata[0x98:0x98+4])[0]), 28, 71)			# 0x98 = ???
-			printAt('0x9C FLOAT {:11.5f}'.format(struct.unpack('f', ddata[0x9C:0x9C+4])[0]), 29, 71)			# 0x9C = ???
-			printAt('0xA0 FLOAT {:11.5f}'.format(struct.unpack('f', ddata[0xA0:0xA0+4])[0]), 30, 71)			# 0xA0 = ???
+printAt('{:6.1f}'.format(struct.unpack('f', ddata[0x68:0x68+4])[0]), 25, 5)						# tyre temp RL
+printAt('{:6.1f}'.format(struct.unpack('f', ddata[0x6C:0x6C+4])[0]), 25, 25)					# tyre temp RR
+printAt('{:6.1f}'.format(200 * tyreDiamRL), 25, 43)												# tyre diameter RL
+printAt('{:6.1f}'.format(200 * tyreDiamRR), 25, 50)												# tyre diameter RR
 
-			printAt('0xD4 FLOAT {:11.5f}'.format(struct.unpack('f', ddata[0xD4:0xD4+4])[0]), 32, 71)			# 0xD4 = ???
-			printAt('0xD8 FLOAT {:11.5f}'.format(struct.unpack('f', ddata[0xD8:0xD8+4])[0]), 33, 71)			# 0xD8 = ???
-			printAt('0xDC FLOAT {:11.5f}'.format(struct.unpack('f', ddata[0xDC:0xDC+4])[0]), 34, 71)			# 0xDC = ???
-			printAt('0xE0 FLOAT {:11.5f}'.format(struct.unpack('f', ddata[0xE0:0xE0+4])[0]), 35, 71)			# 0xE0 = ???
+printAt('{:6.1f}'.format(tyreSpeedRL), 26, 5)													# tyre speed RL
+printAt('{:6.1f}'.format(tyreSpeedRR), 26, 25)													# tyre speed RR
+printAt(tyreSlipRatioRL, 26, 43)																# tyre slip ratio RL
+printAt(tyreSlipRatioRR, 26, 50)																# tyre slip ratio RR
 
-			printAt('0xE4 FLOAT {:11.5f}'.format(struct.unpack('f', ddata[0xE4:0xE4+4])[0]), 36, 71)			# 0xE4 = ???
-			printAt('0xE8 FLOAT {:11.5f}'.format(struct.unpack('f', ddata[0xE8:0xE8+4])[0]), 37, 71)			# 0xE8 = ???
-			printAt('0xEC FLOAT {:11.5f}'.format(struct.unpack('f', ddata[0xEC:0xEC+4])[0]), 38, 71)			# 0xEC = ???
-			printAt('0xF0 FLOAT {:11.5f}'.format(struct.unpack('f', ddata[0xF0:0xF0+4])[0]), 39, 71)			# 0xF0 = ???
+printAt('{:6.3f}'.format(struct.unpack('f', ddata[0xCC:0xCC+4])[0]), 27, 5)						# suspension RL
+printAt('{:6.3f}'.format(struct.unpack('f', ddata[0xD0:0xD0+4])[0]), 27, 25)					# suspension RR
 
-			printAt('{:>10}'.format(pktid), 1, 83)						# packet id
+printAt('{:7.3f}'.format(struct.unpack('f', ddata[0x104:0x104+4])[0]), 30, 5)					# 1st gear
+printAt('{:7.3f}'.format(struct.unpack('f', ddata[0x108:0x108+4])[0]), 31, 5)					# 2nd gear
+printAt('{:7.3f}'.format(struct.unpack('f', ddata[0x10C:0x10C+4])[0]), 32, 5)					# 3rd gear
+printAt('{:7.3f}'.format(struct.unpack('f', ddata[0x110:0x110+4])[0]), 33, 5)					# 4th gear
+printAt('{:7.3f}'.format(struct.unpack('f', ddata[0x114:0x114+4])[0]), 34, 5)					# 5th gear
+printAt('{:7.3f}'.format(struct.unpack('f', ddata[0x118:0x118+4])[0]), 35, 5)					# 6th gear
+printAt('{:7.3f}'.format(struct.unpack('f', ddata[0x11C:0x11C+4])[0]), 36, 5)					# 7th gear
+printAt('{:7.3f}'.format(struct.unpack('f', ddata[0x120:0x120+4])[0]), 37, 5)					# 8th gear
 
-		if pknt > 100:
-			send_hb(s)
-			pknt = 0
-	except Exception as e:
-		printAt('Exception: {}'.format(e), 41, 1, reverse=1)
-		send_hb(s)
-		pknt = 0
-		pass
+printAt('{:7.3f}'.format(struct.unpack('f', ddata[0x100:0x100+4])[0]), 39, 5)					# ??? gear
 
+printAt('{:11.4f}'.format(struct.unpack('f', ddata[0x04:0x04+4])[0]), 30, 23)					# pos X
+printAt('{:11.4f}'.format(struct.unpack('f', ddata[0x08:0x08+4])[0]), 31, 23)					# pos Y
+printAt('{:11.4f}'.format(struct.unpack('f', ddata[0x0C:0x0C+4])[0]), 32, 23)					# pos Z
+
+printAt('{:11.4f}'.format(struct.unpack('f', ddata[0x10:0x10+4])[0]), 30, 43)					# velocity X
+printAt('{:11.4f}'.format(struct.unpack('f', ddata[0x14:0x14+4])[0]), 31, 43)					# velocity Y
+printAt('{:11.4f}'.format(struct.unpack('f', ddata[0x18:0x18+4])[0]), 32, 43)					# velocity Z
+
+printAt('{:9.4f}'.format(struct.unpack('f', ddata[0x1C:0x1C+4])[0]), 35, 23)					# rot Pitch
+printAt('{:9.4f}'.format(struct.unpack('f', ddata[0x20:0x20+4])[0]), 36, 23)					# rot Yaw
+printAt('{:9.4f}'.format(struct.unpack('f', ddata[0x24:0x24+4])[0]), 37, 23)					# rot Roll
+
+printAt('{:9.4f}'.format(struct.unpack('f', ddata[0x2C:0x2C+4])[0]), 35, 43)					# angular velocity X
+printAt('{:9.4f}'.format(struct.unpack('f', ddata[0x30:0x30+4])[0]), 36, 43)					# angular velocity Y
+printAt('{:9.4f}'.format(struct.unpack('f', ddata[0x34:0x34+4])[0]), 37, 43)					# angular velocity Z
+
+printAt('{:7.4f}'.format(struct.unpack('f', ddata[0x28:0x28+4])[0]), 39, 25)					# rot ???
+
+printAt('0x8E BITS  =  {:0>8}'.format(bin(struct.unpack('B', ddata[0x8E:0x8E+1])[0])[2:]), 23, 71)	# various flags (see https://github.com/Nenkai/PDTools/blob/master/PDTools.SimulatorInterface/SimulatorPacketG7S0.cs)
+printAt('0x8F BITS  =  {:0>8}'.format(bin(struct.unpack('B', ddata[0x8F:0x8F+1])[0])[2:]), 24, 71)	# various flags (see https://github.com/Nenkai/PDTools/blob/master/PDTools.SimulatorInterface/SimulatorPacketG7S0.cs)
+printAt('0x93 BITS  =  {:0>8}'.format(bin(struct.unpack('B', ddata[0x93:0x93+1])[0])[2:]), 25, 71)	# 0x93 = ???
+
+printAt('0x94 FLOAT {:11.5f}'.format(struct.unpack('f', ddata[0x94:0x94+4])[0]), 27, 71)			# 0x94 = ???
+printAt('0x98 FLOAT {:11.5f}'.format(struct.unpack('f', ddata[0x98:0x98+4])[0]), 28, 71)			# 0x98 = ???
+printAt('0x9C FLOAT {:11.5f}'.format(struct.unpack('f', ddata[0x9C:0x9C+4])[0]), 29, 71)			# 0x9C = ???
+printAt('0xA0 FLOAT {:11.5f}'.format(struct.unpack('f', ddata[0xA0:0xA0+4])[0]), 30, 71)			# 0xA0 = ???
+
+printAt('0xD4 FLOAT {:11.5f}'.format(struct.unpack('f', ddata[0xD4:0xD4+4])[0]), 32, 71)			# 0xD4 = ???
+printAt('0xD8 FLOAT {:11.5f}'.format(struct.unpack('f', ddata[0xD8:0xD8+4])[0]), 33, 71)			# 0xD8 = ???
+printAt('0xDC FLOAT {:11.5f}'.format(struct.unpack('f', ddata[0xDC:0xDC+4])[0]), 34, 71)			# 0xDC = ???
+printAt('0xE0 FLOAT {:11.5f}'.format(struct.unpack('f', ddata[0xE0:0xE0+4])[0]), 35, 71)			# 0xE0 = ???
+
+printAt('0xE4 FLOAT {:11.5f}'.format(struct.unpack('f', ddata[0xE4:0xE4+4])[0]), 36, 71)			# 0xE4 = ???
+printAt('0xE8 FLOAT {:11.5f}'.format(struct.unpack('f', ddata[0xE8:0xE8+4])[0]), 37, 71)			# 0xE8 = ???
+printAt('0xEC FLOAT {:11.5f}'.format(struct.unpack('f', ddata[0xEC:0xEC+4])[0]), 38, 71)			# 0xEC = ???
+printAt('0xF0 FLOAT {:11.5f}'.format(struct.unpack('f', ddata[0xF0:0xF0+4])[0]), 39, 71)			# 0xF0 = ???
+
+printAt('{:>10}'.format(pktid), 1, 83)						# packet id
+
+if pknt > 100:
+	send_hb(s)
+	pknt = 0
+	time.sleep(0.01)
 	sys.stdout.flush()

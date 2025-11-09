@@ -6,7 +6,7 @@ import sys
 import struct
 import time  # put this at the top with imports
 # pip3 install salsa20
-from salsa20 import Salsa20_xor
+from Crypto.Cipher import Salsa20
 
 # ansi prefix
 pref = "\033["
@@ -43,20 +43,24 @@ s.settimeout(10)
 
 # data stream decoding
 def salsa20_dec(dat):
-	KEY = b'Simulator Interface Packet GT7 ver 0.0'
-	# Seed IV is always located here
-	oiv = dat[0x40:0x44]
-	iv1 = int.from_bytes(oiv, byteorder='little')
-	# Notice DEADBEAF, not DEADBEEF
-	iv2 = iv1 ^ 0xDEADBEAF
-	IV = bytearray()
-	IV.extend(iv2.to_bytes(4, 'little'))
-	IV.extend(iv1.to_bytes(4, 'little'))
-	ddata = Salsa20_xor(dat, bytes(IV), KEY[0:32])
-	magic = int.from_bytes(ddata[0:4], byteorder='little')
-	if magic != 0x47375330:
-		return bytearray(b'')
-	return ddata
+    KEY = b'Simulator Interface Packet GT7 ver 0.0'
+    # Seed IV is always located here
+    oiv = dat[0x40:0x44]
+    iv1 = int.from_bytes(oiv, byteorder='little')
+    # Notice DEADBEAF, not DEADBEEF
+    iv2 = iv1 ^ 0xDEADBEAF
+    IV = bytearray()
+    IV.extend(iv2.to_bytes(4, 'little'))
+    IV.extend(iv1.to_bytes(4, 'little'))
+
+    cipher = Salsa20.new(key=KEY[:32], nonce=bytes(IV))
+    ddata = cipher.decrypt(dat)
+
+    magic = int.from_bytes(ddata[0:4], byteorder='little')
+    if magic != 0x47375330:
+        return bytearray(b'')
+    return ddata
+
 
 # send heartbeat
 def send_hb(s):

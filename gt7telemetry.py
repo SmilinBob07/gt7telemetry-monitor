@@ -5,6 +5,7 @@ import socket
 import sys
 import struct
 import time  # put this at the top with imports
+import json
 # pip3 install salsa20
 from Crypto.Cipher import Salsa20
 
@@ -176,6 +177,9 @@ sys.stdout.flush()
 prevlap = -1
 pktid = 0
 pknt = 0
+SIMHUB_IP = "127.0.0.1"     # Localhost for SimHub
+SIMHUB_PORT = 5056          # Default SimHub UDP port
+simhub_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 while True:
 	data, _ = s.recvfrom(2048)
 	pknt = pknt + 1
@@ -435,9 +439,23 @@ printAt('0xEC FLOAT {:11.5f}'.format(struct.unpack('f', ddata[0xEC:0xEC+4])[0]),
 printAt('0xF0 FLOAT {:11.5f}'.format(struct.unpack('f', ddata[0xF0:0xF0+4])[0]), 39, 71)			# 0xF0 = ???
 
 printAt('{:>10}'.format(pktid), 1, 83)						# packet id
+# --- Send custom telemetry to SimHub ---
+try:
+	payload = {
+		"Speed": carSpeed,
+		"Brake": struct.unpack('B', ddata[0x92:0x92+1])[0] / 2.55,
+		"Throttle": struct.unpack('B', ddata[0x91:0x91+1])[0] / 2.55,
+		"ABS_Active": 1 if abs(float(tyreSlipRatioFL)) > 1.15 or abs(float(tyreSlipRatioFR)) > 1.15 else 0,
+		"Wheel_Lock": 1 if abs(float(tyreSlipRatioFL)) < 0.90 or abs(float(tyreSlipRatioFR)) < 0.90 else 0,
+	}
+	simhub_socket.sendto(json.dumps(payload).encode('utf-8'), (SIMHUB_IP, SIMHUB_PORT))
+except Exception as send_error:
+	printAt(f'SimHub send error: {send_error}', 42, 1)
 
 if pknt > 100:
 	send_hb(s)
 	pknt = 0
 	time.sleep(0.01)
 	sys.stdout.flush()
+
+
